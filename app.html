@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>App Temperatures</title>
+    <style>
+        body { font-family: Arial; margin: 0; background: #1a1a2e; color: white; }
+        .header { background: #16213e; padding: 20px; text-align: center; }
+        h1 { margin: 0; font-size: 24px; }
+        .card { background: #16213e; margin: 10px; padding: 15px; border-radius: 12px; }
+        h2 { color: #4CAF50; font-size: 18px; }
+        .temp-big { font-size: 48px; text-align: center; color: #4CAF50; }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: #4CAF50; padding: 8px; }
+        td { padding: 8px; border-bottom: 1px solid #333; text-align: center; }
+        a { color: #4CAF50; display: block; text-align: center; margin: 10px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🌡️ Temperatures Raspberry Pi</h1>
+    </div>
+
+    <div class="card">
+        <h2>📍 Última temperatura</h2>
+        <div class="temp-big" id="ultima">-</div>
+    </div>
+
+    <div class="card">
+        <h2>📊 Estadístiques d'avui</h2>
+        <p>🔴 Màxima: <strong id="max">-</strong></p>
+        <p>🔵 Mínima: <strong id="min">-</strong></p>
+        <p>🟡 Mitjana: <strong id="mitjana">-</strong></p>
+    </div>
+
+    <div class="card">
+        <h2>📅 Estadístiques del mes</h2>
+        <p>🔴 Màxima: <strong id="maxMes">-</strong></p>
+        <p>🔵 Mínima: <strong id="minMes">-</strong></p>
+        <p>🟡 Mitjana: <strong id="mitjana_mes">-</strong></p>
+    </div>
+
+    <div class="card">
+        <h2>📋 Últimes 10 lectures</h2>
+        <table>
+            <thead><tr><th>Data</th><th>°C</th></tr></thead>
+            <tbody id="taula"></tbody>
+        </table>
+    </div>
+
+    <a href="temperatures.csv">📁 Descarrega
