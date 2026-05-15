@@ -1,15 +1,60 @@
 <!DOCTYPE html>
-<html>
+<html lang="ca">
 <head>
+    <meta charset="UTF-8">
     <title>Temperatures Raspberry Pi</title>
+    <style>
+        body { font-family: Arial; margin: 20px; background: #f0f0f0; }
+        h1 { color: #333; }
+        table { border-collapse: collapse; width: 100%; background: white; }
+        th { background: #4CAF50; color: white; padding: 10px; }
+        td { padding: 8px; border: 1px solid #ddd; text-align: center; }
+        tr:nth-child(even) { background: #f9f9f9; }
+        .stats { background: white; padding: 15px; margin: 10px 0; border-radius: 8px; }
+    </style>
 </head>
 <body>
+    <h1>🌡️ Temperatures Raspberry Pi</h1>
 
-    <h1>📊 Dades de temperatura</h1>
+    <div class="stats">
+        <h2>📊 Estadístiques d'avui</h2>
+        <p>Màxima: <strong id="max">-</strong></p>
+        <p>Mínima: <strong id="min">-</strong></p>
+        <p>Mitjana: <strong id="mitjana">-</strong></p>
+    </div>
 
-    <p>Aquí pots veure el fitxer de dades:</p>
+    <div class="stats">
+        <h2>📅 Estadístiques mensuals</h2>
+        <p>Màxima del mes: <strong id="maxMes">-</strong></p>
+        <p>Mínima del mes: <strong id="minMes">-</strong></p>
+        <p>Mitjana del mes: <strong id="mitjana_mes">-</strong></p>
+    </div>
 
-    <a href="dades.csv">📁 Veure dades CSV</a>
+    <div class="stats">
+        <h2>📋 Totes les dades</h2>
+        <table>
+            <thead><tr><th>Data i hora</th><th>Temperatura (°C)</th></tr></thead>
+            <tbody id="taula"></tbody>
+        </table>
+    </div>
 
-</body>
-</html>
+    <br>
+    <a href="temperatures.csv">📁 Descarregar CSV</a>
+
+    <script>
+        fetch('temperatures.csv')
+            .then(r => r.text())
+            .then(text => {
+                const lines = text.trim().split('\n').slice(1);
+                const avui = new Date().toISOString().slice(0, 10);
+                const mes = new Date().toISOString().slice(0, 7);
+
+                let dadesAvui = [];
+                let dadesMes = [];
+                let taula = document.getElementById('taula');
+
+                lines.forEach(line => {
+                    const [data, temp] = line.split(',');
+                    const t = parseFloat(temp);
+                    if (!isNaN(t)) {
+                        if (data.startsWith(avui)) dadesAvui.p
