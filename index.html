@@ -1,68 +1,616 @@
 <!DOCTYPE html>
 <html lang="ca">
 <head>
-    <meta charset="UTF-8">
-    <title>Temperatures Raspberry Pi</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        body { font-family: Arial; margin: 20px; background: #f0f0f0; }
-        h1 { color: #333; }
-        table { border-collapse: collapse; width: 100%; background: white; }
-        th { background: #4CAF50; color: white; padding: 10px; }
-        td { padding: 8px; border: 1px solid #ddd; text-align: center; }
-        tr:nth-child(even) { background: #f9f9f9; }
-        .stats { background: white; padding: 15px; margin: 10px 0; border-radius: 8px; }
-        .grafic { background: white; padding: 15px; margin: 10px 0; border-radius: 8px; }
-    </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Monitor Temperatura DS18B20 · Raspberry Pi</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;600&display=swap" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg:       #0a0e14;
+    --surface:  #111821;
+    --card:     #18222e;
+    --border:   #1f2e3f;
+    --accent:   #00d4aa;
+    --accent2:  #ff6b35;
+    --accent3:  #4a9eff;
+    --text:     #e8f4f0;
+    --muted:    #6b8a9a;
+    --danger:   #ff4466;
+    --warn:     #ffcc44;
+    --font-mono: 'Space Mono', monospace;
+    --font-body: 'DM Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Grid de fons ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,212,170,.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,170,.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Header ── */
+  header {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.4rem 2rem;
+    border-bottom: 1px solid var(--border);
+    background: rgba(10,14,20,.85);
+    backdrop-filter: blur(12px);
+  }
+
+  .header-left { display: flex; align-items: center; gap: 1rem; }
+
+  .pulse-dot {
+    width: 10px; height: 10px;
+    background: var(--accent);
+    border-radius: 50%;
+    animation: pulse 2s ease-in-out infinite;
+    box-shadow: 0 0 0 0 rgba(0,212,170,.6);
+  }
+  @keyframes pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(0,212,170,.6); }
+    70%  { box-shadow: 0 0 0 8px rgba(0,212,170,0); }
+    100% { box-shadow: 0 0 0 0 rgba(0,212,170,0); }
+  }
+
+  .logo {
+    font-family: var(--font-mono);
+    font-size: .95rem;
+    color: var(--accent);
+    letter-spacing: .08em;
+  }
+  .logo span { color: var(--muted); }
+
+  #last-update {
+    font-family: var(--font-mono);
+    font-size: .72rem;
+    color: var(--muted);
+  }
+
+  /* ── Layout principal ── */
+  main {
+    position: relative;
+    z-index: 1;
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+
+  /* ── KPI cards ── */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  .kpi {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.2rem 1.4rem;
+    position: relative;
+    overflow: hidden;
+    transition: transform .2s, border-color .2s;
+  }
+  .kpi:hover { transform: translateY(-2px); border-color: var(--accent); }
+  .kpi::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--kpi-color, var(--accent));
+    border-radius: 12px 12px 0 0;
+  }
+
+  .kpi-label {
+    font-size: .72rem;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--muted);
+    margin-bottom: .5rem;
+  }
+  .kpi-value {
+    font-family: var(--font-mono);
+    font-size: 1.9rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .kpi-unit { font-size: 1rem; color: var(--muted); margin-left: 3px; }
+
+  /* ── Seccions de gràfics ── */
+  .section-title {
+    font-size: .7rem;
+    text-transform: uppercase;
+    letter-spacing: .15em;
+    color: var(--muted);
+    margin: 2rem 0 1rem;
+    display: flex;
+    align-items: center;
+    gap: .7rem;
+  }
+  .section-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .charts-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+  @media (max-width: 768px) {
+    .charts-row { grid-template-columns: 1fr; }
+  }
+
+  .chart-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.4rem;
+  }
+  .chart-card h3 {
+    font-size: .78rem;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--muted);
+    margin-bottom: 1rem;
+  }
+  .chart-wrap { position: relative; height: 220px; }
+
+  /* ── Taula d'últimes lectures ── */
+  .table-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.4rem;
+    overflow-x: auto;
+  }
+  .table-card h3 {
+    font-size: .78rem;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--muted);
+    margin-bottom: 1rem;
+  }
+
+  table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+  th {
+    text-align: left;
+    padding: .5rem .8rem;
+    color: var(--muted);
+    font-weight: 400;
+    font-family: var(--font-mono);
+    font-size: .68rem;
+    letter-spacing: .08em;
+    border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: .55rem .8rem;
+    border-bottom: 1px solid rgba(31,46,63,.5);
+    font-family: var(--font-mono);
+    font-size: .78rem;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(0,212,170,.03); }
+
+  .badge {
+    display: inline-block;
+    padding: .15rem .5rem;
+    border-radius: 4px;
+    font-size: .65rem;
+    font-family: var(--font-mono);
+  }
+  .badge-sim  { background: rgba(74,158,255,.15); color: var(--accent3); }
+  .badge-real { background: rgba(0,212,170,.15);  color: var(--accent); }
+
+  /* ── Hores del dia ── */
+  .franja-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: .8rem;
+    margin-bottom: 2rem;
+  }
+  @media (max-width: 600px) { .franja-grid { grid-template-columns: 1fr; } }
+
+  .franja-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.2rem;
+  }
+  .franja-name {
+    font-size: .7rem;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--muted);
+    margin-bottom: .3rem;
+  }
+  .franja-val {
+    font-family: var(--font-mono);
+    font-size: 1.4rem;
+    font-weight: 700;
+  }
+  .franja-range { font-size: .7rem; color: var(--muted); margin-top: .1rem; }
+
+  /* ── Loader ── */
+  #loader {
+    position: fixed; inset: 0; background: var(--bg);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    z-index: 999; gap: 1rem;
+  }
+  .spinner {
+    width: 36px; height: 36px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loader p { font-family: var(--font-mono); font-size: .8rem; color: var(--muted); }
+
+  /* ── Error ── */
+  #error-msg {
+    display: none;
+    background: rgba(255,68,102,.1);
+    border: 1px solid rgba(255,68,102,.3);
+    border-radius: 10px;
+    padding: 1rem 1.4rem;
+    color: var(--danger);
+    font-family: var(--font-mono);
+    font-size: .82rem;
+    margin-bottom: 1.5rem;
+  }
+</style>
 </head>
 <body>
-    <h1>🌡️ Temperatures Raspberry Pi</h1>
 
-    <div class="stats">
-        <h2>📊 Estadístiques d'avui</h2>
-        <p>Màxima: <strong id="max">-</strong></p>
-        <p>Mínima: <strong id="min">-</strong></p>
-        <p>Mitjana: <strong id="mitjana">-</strong></p>
+<div id="loader">
+  <div class="spinner"></div>
+  <p>Carregant dades del sensor…</p>
+</div>
+
+<header>
+  <div class="header-left">
+    <div class="pulse-dot"></div>
+    <span class="logo">DS18B20 <span>/ Raspberry Pi</span></span>
+  </div>
+  <span id="last-update">—</span>
+</header>
+
+<main>
+  <div id="error-msg"></div>
+
+  <!-- KPIs -->
+  <div class="kpi-grid">
+    <div class="kpi" style="--kpi-color:var(--accent)">
+      <div class="kpi-label">Última lectura</div>
+      <div class="kpi-value" id="kpi-last">—<span class="kpi-unit">°C</span></div>
     </div>
-
-    <div class="stats">
-        <h2>📅 Estadístiques mensuals</h2>
-        <p>Màxima del mes: <strong id="maxMes">-</strong></p>
-        <p>Mínima del mes: <strong id="minMes">-</strong></p>
-        <p>Mitjana del mes: <strong id="mitjana_mes">-</strong></p>
+    <div class="kpi" style="--kpi-color:var(--accent3)">
+      <div class="kpi-label">Mitjana avui</div>
+      <div class="kpi-value" id="kpi-avg">—<span class="kpi-unit">°C</span></div>
     </div>
-
-    <div class="grafic">
-        <h2>📈 Gràfic de temperatures</h2>
-        <canvas id="grafic"></canvas>
+    <div class="kpi" style="--kpi-color:var(--accent2)">
+      <div class="kpi-label">Màxim avui</div>
+      <div class="kpi-value" id="kpi-max">—<span class="kpi-unit">°C</span></div>
     </div>
-
-    <div class="stats">
-        <h2>📋 Totes les dades</h2>
-        <table>
-            <thead><tr><th>Data i hora</th><th>Temperatura (°C)</th></tr></thead>
-            <tbody id="taula"></tbody>
-        </table>
+    <div class="kpi" style="--kpi-color:var(--warn)">
+      <div class="kpi-label">Mínim avui</div>
+      <div class="kpi-value" id="kpi-min">—<span class="kpi-unit">°C</span></div>
     </div>
+    <div class="kpi" style="--kpi-color:var(--muted)">
+      <div class="kpi-label">Total lectures</div>
+      <div class="kpi-value" id="kpi-total">—</div>
+    </div>
+  </div>
 
-    <br>
-    <a href="temperatures.csv">📁 Descarregar CSV</a>
-    <a href="app.html">📱 Versió mòbil</a>
+  <!-- Franjes horàries -->
+  <p class="section-title">Franges del dia (avui)</p>
+  <div class="franja-grid">
+    <div class="franja-card">
+      <div class="franja-name">🌅 Matí (00-08h)</div>
+      <div class="franja-val" id="f-mati">—°C</div>
+      <div class="franja-range" id="f-mati-r">—</div>
+    </div>
+    <div class="franja-card">
+      <div class="franja-name">☀️ Migdia (08-16h)</div>
+      <div class="franja-val" id="f-migdia">—°C</div>
+      <div class="franja-range" id="f-migdia-r">—</div>
+    </div>
+    <div class="franja-card">
+      <div class="franja-name">🌙 Tarda/Nit (16-24h)</div>
+      <div class="franja-val" id="f-nit">—°C</div>
+      <div class="franja-range" id="f-nit-r">—</div>
+    </div>
+  </div>
 
-    <script>
-        fetch('temperatures.csv')
-            .then(r => r.text())
-            .then(text => {
-                const lines = text.trim().split('\n').slice(1);
-                const avui = new Date().toISOString().slice(0, 10);
-                const mes = new Date().toISOString().slice(0, 7);
+  <!-- Gràfics principals -->
+  <p class="section-title">Evolució de la temperatura</p>
+  <div class="charts-row">
+    <div class="chart-card">
+      <h3>Últimes lectures (temps real)</h3>
+      <div class="chart-wrap"><canvas id="chart-live"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>Distribució avui</h3>
+      <div class="chart-wrap"><canvas id="chart-dist"></canvas></div>
+    </div>
+  </div>
 
-                let dadesAvui = [];
-                let dadesMes = [];
-                let etiquetes = [];
-                let valors = [];
-                let taula = document.getElementById('taula');
+  <!-- Gràfic mensual -->
+  <p class="section-title">Estadístiques mensuals</p>
+  <div class="chart-card" style="margin-bottom:1rem">
+    <h3>Mitjanes diàries del mes</h3>
+    <div class="chart-wrap" style="height:200px"><canvas id="chart-monthly"></canvas></div>
+  </div>
 
-                lines.forEach(line => {
-                    const [data, temp] = line.split(',');
-                    const t = parseFloat(temp);
+  <!-- Taula -->
+  <p class="section-title">Últimes 20 lectures</p>
+  <div class="table-card">
+    <h3>Registre de lectures</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>Temp (°C)</th>
+          <th>Temp (°F)</th>
+          <th>Font</th>
+          <th>Sensor ID</th>
+        </tr>
+      </thead>
+      <tbody id="readings-table"></tbody>
+    </table>
+  </div>
+</main>
+
+<script>
+// ── Configuració ─────────────────────────────────────────────────────────────
+// Canvia aquesta URL al teu repositori GitHub Pages
+const JSON_URL = "./data/temperatures.json";
+const REFRESH_MS = 60_000;   // Actualitza cada minut
+
+// ── Utilitats ─────────────────────────────────────────────────────────────────
+const avg = arr => arr.length ? arr.reduce((a,b) => a+b, 0) / arr.length : null;
+const fmt = v => v !== null ? v.toFixed(2) : "—";
+
+function groupByFranja(readings, date) {
+  const today = readings.filter(r => r.date === date);
+  const mati   = today.filter(r => { const h = parseInt(r.time); return h >= 0  && h < 8;  }).map(r => r.temperature_c);
+  const migdia = today.filter(r => { const h = parseInt(r.time); return h >= 8  && h < 16; }).map(r => r.temperature_c);
+  const nit    = today.filter(r => { const h = parseInt(r.time); return h >= 16 && h < 24; }).map(r => r.temperature_c);
+  return { mati, migdia, nit };
+}
+
+function groupByDay(readings) {
+  const map = {};
+  readings.forEach(r => {
+    if (!map[r.date]) map[r.date] = [];
+    map[r.date].push(r.temperature_c);
+  });
+  return Object.entries(map)
+    .sort(([a],[b]) => a.localeCompare(b))
+    .map(([date, temps]) => ({ date, avg: avg(temps), min: Math.min(...temps), max: Math.max(...temps) }));
+}
+
+// ── Charts globals ─────────────────────────────────────────────────────────────
+let chartLive, chartDist, chartMonthly;
+
+const chartDefaults = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { display: false } },
+  scales: {
+    x: { ticks: { color: '#6b8a9a', font: { family: 'Space Mono', size: 9 } }, grid: { color: '#1f2e3f' } },
+    y: { ticks: { color: '#6b8a9a', font: { family: 'Space Mono', size: 9 } }, grid: { color: '#1f2e3f' } }
+  }
+};
+
+function buildLiveChart(labels, data) {
+  const ctx = document.getElementById('chart-live').getContext('2d');
+  if (chartLive) chartLive.destroy();
+  chartLive = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        borderColor: '#00d4aa',
+        backgroundColor: 'rgba(0,212,170,.08)',
+        borderWidth: 2,
+        pointRadius: 3,
+        pointBackgroundColor: '#00d4aa',
+        tension: 0.35,
+        fill: true
+      }]
+    },
+    options: {
+      ...chartDefaults,
+      plugins: { ...chartDefaults.plugins, tooltip: {
+        callbacks: { label: ctx => ` ${ctx.parsed.y.toFixed(2)} °C` }
+      }}
+    }
+  });
+}
+
+function buildDistChart(data) {
+  const ctx = document.getElementById('chart-dist').getContext('2d');
+  if (chartDist) chartDist.destroy();
+
+  // Histograma de distribució: cubs de 0.5°C
+  const min = Math.floor(Math.min(...data) * 2) / 2;
+  const max = Math.ceil( Math.max(...data) * 2) / 2;
+  const bins = {};
+  for (let b = min; b <= max; b += 0.5) bins[b.toFixed(1)] = 0;
+  data.forEach(t => {
+    const b = (Math.floor(t * 2) / 2).toFixed(1);
+    if (bins[b] !== undefined) bins[b]++;
+  });
+  const labels = Object.keys(bins);
+  const counts = Object.values(bins);
+
+  chartDist = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        data: counts,
+        backgroundColor: 'rgba(74,158,255,.5)',
+        borderColor: '#4a9eff',
+        borderWidth: 1,
+        borderRadius: 3
+      }]
+    },
+    options: {
+      ...chartDefaults,
+      scales: {
+        x: { ...chartDefaults.scales.x, title: { display: true, text: '°C', color: '#6b8a9a', font: { size: 9 } } },
+        y: { ...chartDefaults.scales.y, title: { display: true, text: 'Lectures', color: '#6b8a9a', font: { size: 9 } } }
+      }
+    }
+  });
+}
+
+function buildMonthlyChart(dailyData) {
+  const ctx = document.getElementById('chart-monthly').getContext('2d');
+  if (chartMonthly) chartMonthly.destroy();
+
+  const labels = dailyData.map(d => d.date.slice(5));   // MM-DD
+  const avgs   = dailyData.map(d => d.avg);
+  const mins   = dailyData.map(d => d.min);
+  const maxs   = dailyData.map(d => d.max);
+
+  chartMonthly = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { data: maxs,  borderColor: '#ff6b35', borderWidth: 1.5, pointRadius: 2, tension: 0.3, fill: false, label: 'Màx' },
+        { data: avgs,  borderColor: '#00d4aa', borderWidth: 2,   pointRadius: 3, tension: 0.3, fill: false, label: 'Mitjana' },
+        { data: mins,  borderColor: '#4a9eff', borderWidth: 1.5, pointRadius: 2, tension: 0.3, fill: false, label: 'Mín' }
+      ]
+    },
+    options: {
+      ...chartDefaults,
+      plugins: { legend: {
+        display: true,
+        labels: { color: '#6b8a9a', font: { family: 'Space Mono', size: 9 } }
+      }}
+    }
+  });
+}
+
+// ── Renderitzar taula ─────────────────────────────────────────────────────────
+function renderTable(readings) {
+  const tbody = document.getElementById('readings-table');
+  const last20 = readings.slice(-20).reverse();
+  tbody.innerHTML = last20.map(r => `
+    <tr>
+      <td>${r.timestamp}</td>
+      <td style="color:var(--accent)">${parseFloat(r.temperature_c).toFixed(4)}</td>
+      <td style="color:var(--muted)">${parseFloat(r.temperature_f).toFixed(4)}</td>
+      <td><span class="badge badge-${r.source === 'real' ? 'real' : 'sim'}">${r.source}</span></td>
+      <td style="color:var(--muted);font-size:.68rem">${r.sensor_id || '—'}</td>
+    </tr>
+  `).join('');
+}
+
+// ── Renderitzar franges ───────────────────────────────────────────────────────
+function renderFranges(readings, today) {
+  const { mati, migdia, nit } = groupByFranja(readings, today);
+  const setFranja = (id, rId, arr) => {
+    document.getElementById(id).textContent  = arr.length ? fmt(avg(arr)) + '°C' : '—';
+    document.getElementById(rId).textContent = arr.length
+      ? `Mín ${fmt(Math.min(...arr))} · Màx ${fmt(Math.max(...arr))}`
+      : 'Sense dades';
+  };
+  setFranja('f-mati',   'f-mati-r',   mati);
+  setFranja('f-migdia', 'f-migdia-r', migdia);
+  setFranja('f-nit',    'f-nit-r',    nit);
+}
+
+// ── Càrrega principal ─────────────────────────────────────────────────────────
+async function loadData() {
+  try {
+    const res  = await fetch(JSON_URL + '?t=' + Date.now());
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+
+    const readings = json.readings || [];
+    const stats    = json.statistics || {};
+    const today    = new Date().toISOString().slice(0,10);
+    const todayR   = readings.filter(r => r.date === today);
+    const todayT   = todayR.map(r => r.temperature_c);
+
+    // KPIs
+    const last = readings[readings.length - 1];
+    document.getElementById('kpi-last').innerHTML  = `${fmt(last?.temperature_c)}<span class="kpi-unit">°C</span>`;
+    document.getElementById('kpi-avg').innerHTML   = `${fmt(avg(todayT))}<span class="kpi-unit">°C</span>`;
+    document.getElementById('kpi-max').innerHTML   = `${todayT.length ? fmt(Math.max(...todayT)) : '—'}<span class="kpi-unit">°C</span>`;
+    document.getElementById('kpi-min').innerHTML   = `${todayT.length ? fmt(Math.min(...todayT)) : '—'}<span class="kpi-unit">°C</span>`;
+    document.getElementById('kpi-total').textContent = stats.total_readings ?? readings.length;
+
+    // Header
+    document.getElementById('last-update').textContent = 'Actualitzat: ' + (stats.last_updated ?? '—');
+
+    // Gràfic live: últimes 50 lectures
+    const live50 = readings.slice(-50);
+    buildLiveChart(live50.map(r => r.time), live50.map(r => r.temperature_c));
+
+    // Gràfic distribució (avui)
+    if (todayT.length > 1) buildDistChart(todayT);
+
+    // Gràfic mensual
+    const daily = groupByDay(readings);
+    if (daily.length > 0) buildMonthlyChart(daily);
+
+    // Franges
+    renderFranges(readings, today);
+
+    // Taula
+    renderTable(readings);
+
+    // Amaga loader
+    document.getElementById('loader').style.display = 'none';
+
+  } catch (err) {
+    console.error(err);
+    const em = document.getElementById('error-msg');
+    em.style.display = 'block';
+    em.textContent = `Error carregant dades: ${err.message}. Comprova que data/temperatures.json existeix al repositori.`;
+    document.getElementById('loader').style.display = 'none';
+  }
+}
+
+// Càrrega inicial i refresc periòdic
+loadData();
+setInterval(loadData, REFRESH_MS);
+</script>
+</body>
+</html>
